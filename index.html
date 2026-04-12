@@ -1,30 +1,26 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pink Monster - Mobile</title>
     <style>
-        body { margin: 0; padding: 0; background: #222; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        body { margin: 0; padding: 0; background: #222; overflow: hidden; touch-action: none; font-family: sans-serif; user-select: none; -webkit-user-select: none; }
         #gameCanvas { display: block; width: 100vw; height: 100vh; object-fit: contain; background: #1e461e; }
         
-        /* Controlos Mobile */
-        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none; }
-        .btn-group { display: flex; flex-wrap: wrap; width: 140px; pointer-events: auto; }
-        .btn { width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 5px; margin: 2px; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 20px; user-select: none; }
-        .btn:active { background: rgba(255,255,255,0.8); }
+        /* Controles Mobile */
+        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; pointer-events: none; }
         
-        /* D-Pad Layout */
-        .dpad { position: relative; width: 120px; height: 120px; pointer-events: auto; }
-        .btn-up { position: absolute; top: 0; left: 40px; }
-        .btn-left { position: absolute; top: 40px; left: 0; }
-        .btn-right { position: absolute; top: 40px; left: 80px; }
-        .btn-down { position: absolute; top: 80px; left: 40px; }
-        
+        /* Joystick HUD (A bolinha) */
+        .joystick-container { position: relative; width: 120px; height: 120px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; border: 2px solid rgba(255, 255, 255, 0.5); }
+        .joystick-knob { width: 50px; height: 50px; background: rgba(255, 255, 255, 0.7); border-radius: 50%; position: absolute; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+
         /* Botões de Ação */
-        .actions { align-items: flex-end; justify-content: flex-end; position: relative; width: 120px; height: 120px; pointer-events: auto;}
-        .btn-jump { position: absolute; top: 40px; right: 60px; width: 50px; height: 50px; border-radius: 25px; }
-        .btn-attack { position: absolute; top: 80px; right: 0px; width: 50px; height: 50px; border-radius: 25px; background: rgba(255,100,100,0.5); }
+        .actions { display: flex; align-items: flex-end; justify-content: flex-end; position: relative; width: 140px; height: 120px; pointer-events: auto;}
+        .btn { border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px; user-select: none; color: white; border: 2px solid rgba(255, 255, 255, 0.5); text-shadow: 1px 1px 2px black;}
+        .btn:active { transform: scale(0.9); }
+        .btn-jump { position: absolute; top: 0px; right: 80px; width: 60px; height: 60px; background: rgba(100, 200, 255, 0.5); }
+        .btn-attack { position: absolute; bottom: 0px; right: 0px; width: 70px; height: 70px; background: rgba(255, 100, 100, 0.5); }
     </style>
 </head>
 <body>
@@ -32,14 +28,12 @@
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
 <div class="controls">
-    <div class="dpad">
-        <div class="btn btn-up" id="btnW">W</div>
-        <div class="btn btn-left" id="btnA">A</div>
-        <div class="btn btn-right" id="btnD">D</div>
-        <div class="btn btn-down" id="btnS">S</div>
+    <div class="joystick-container" id="joystickBase">
+        <div class="joystick-knob" id="joystickKnob"></div>
     </div>
+    
     <div class="actions">
-        <div class="btn btn-jump" id="btnSpace">Pulo</div>
+        <div class="btn btn-jump" id="btnSpace">Pular</div>
         <div class="btn btn-attack" id="btnJ">Soco</div>
     </div>
 </div>
@@ -49,47 +43,96 @@
     const ctx = canvas.getContext("2d");
 
     // ==========================================
-    // 1. CARREGAR IMAGENS (Assets)
+    // 1. CARREGAR IMAGENS E SONS
     // ==========================================
     const imagens = {};
     function carregarImagem(nome, src) {
         imagens[nome] = { img: new Image(), carregada: false };
         imagens[nome].img.onload = () => { imagens[nome].carregada = true; };
-        imagens[nome].img.onerror = () => { console.log("Erro a carregar: " + src); };
         imagens[nome].img.src = src;
     }
 
-    // Nomes dos ficheiros como no seu Python
     carregarImagem('heroi_parado', 'Pink_Monster.png');
     carregarImagem('inimigo', 'Rock1.png');
     carregarImagem('bau', 'pngwing.com.png');
     carregarImagem('obstaculo', 'Rock2.png');
-    carregarImagem('cenario', 'cenario.jpg'); // Também pode tentar cenario.png
-    
-    // Cartelas de Animação (Spritesheets)
+    carregarImagem('cenario', 'cenario.jpg');
     carregarImagem('andar', 'Pink_Monster_Walk_6.png');
     carregarImagem('ataque', 'Pink_Monster_Attack1_4.png');
     carregarImagem('morte', 'Pink_Monster_Death_8.png');
     carregarImagem('pulo', 'Pink_Monster_Jump_8.png');
     carregarImagem('moeda', 'coin1_16x16.png');
 
+    // Sons
+    const sons = {
+        moeda: new Audio('moeda.wav'),
+        soco: new Audio('soco.wav'),
+        gameover: new Audio('gameover.wav')
+    };
+
+    function tocarSom(nomeSom) {
+        if (sons[nomeSom]) {
+            sons[nomeSom].currentTime = 0; // Volta para o início para não cortar se pegar rápido
+            sons[nomeSom].play().catch(() => {}); // O catch evita erros antes do usuário tocar na tela
+        }
+    }
+
     // ==========================================
-    // 2. INPUTS (Controlos de Ecrã Tátil)
+    // 2. INPUTS (Joystick e Botões)
     // ==========================================
-    const keys = { w: false, a: false, s: false, d: false, space: false, j: false };
+    const keys = { space: false, j: false };
     
+    // Configurando Botões
     function bindButton(id, keyName) {
         const btn = document.getElementById(id);
         btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
         btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
-        btn.addEventListener('mousedown', (e) => { keys[keyName] = true; });
-        btn.addEventListener('mouseup', (e) => { keys[keyName] = false; });
     }
-    bindButton('btnW', 'w'); bindButton('btnA', 'a'); bindButton('btnS', 's'); bindButton('btnD', 'd');
-    bindButton('btnSpace', 'space'); bindButton('btnJ', 'j');
+    bindButton('btnSpace', 'space'); 
+    bindButton('btnJ', 'j');
 
+    // Configurando Joystick (A Bolinha)
+    const joyBase = document.getElementById("joystickBase");
+    const joyKnob = document.getElementById("joystickKnob");
+    let joyAxis = { x: 0, y: 0 }; // Vai de -1 a 1
+    let joyAtivo = false;
+    const raioMaximo = 40; // Distância que a bolinha pode ir
+
+    function atualizarJoystick(e) {
+        e.preventDefault();
+        let touch = e.targetTouches[0];
+        let rect = joyBase.getBoundingClientRect();
+        
+        let centroX = rect.left + rect.width / 2;
+        let centroY = rect.top + rect.height / 2;
+        
+        let dx = touch.clientX - centroX;
+        let dy = touch.clientY - centroY;
+        let distancia = Math.sqrt(dx * dx + dy * dy);
+        
+        // Trava a bolinha dentro do círculo
+        if (distancia > raioMaximo) {
+            dx = (dx / distancia) * raioMaximo;
+            dy = (dy / distancia) * raioMaximo;
+        }
+        
+        joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+        
+        // Define os eixos de velocidade para o jogador
+        joyAxis.x = dx / raioMaximo;
+        joyAxis.y = dy / raioMaximo;
+    }
+
+    joyBase.addEventListener('touchstart', (e) => { joyAtivo = true; atualizarJoystick(e); }, {passive: false});
+    joyBase.addEventListener('touchmove', (e) => { if(joyAtivo) atualizarJoystick(e); }, {passive: false});
+    joyBase.addEventListener('touchend', (e) => { 
+        joyAtivo = false; 
+        joyAxis = {x: 0, y: 0}; 
+        joyKnob.style.transform = `translate(0px, 0px)`; 
+    });
+
+    // Iniciar Jogo tocando na tela
     canvas.addEventListener('touchstart', iniciarJogo);
-    canvas.addEventListener('mousedown', iniciarJogo);
 
     // ==========================================
     // 3. VARIÁVEIS DE JOGO
@@ -134,6 +177,11 @@
     gerarMoeda();
 
     function iniciarJogo() {
+        // Toca um áudio mudo rapidamente para desbloquear o som no navegador mobile
+        if(estadoJogo === "MENU") {
+            sons.moeda.play().then(() => { sons.moeda.pause(); sons.moeda.currentTime = 0; }).catch(()=>{});
+        }
+
         if (estadoJogo === "MENU" || estadoJogo === "GAME_OVER") {
             estadoJogo = "JOGANDO";
             jogador.x = 400; jogador.y = 300; jogador.z = 0; jogador.pulando = false; jogador.viradoDireita = true;
@@ -148,11 +196,14 @@
     // 4. LÓGICA DO JOGO
     // ==========================================
     function update() {
-        moeda.frame += 0.2; // Animação da moeda
+        moeda.frame += 0.2; 
 
         if (estadoJogo === "MORRENDO") {
             jogador.frameMorte += 0.15;
-            if (jogador.frameMorte >= 8) estadoJogo = "GAME_OVER";
+            if (jogador.frameMorte >= 8) {
+                estadoJogo = "GAME_OVER";
+                tocarSom('gameover');
+            }
             return;
         }
 
@@ -162,6 +213,8 @@
         if (keys.j && !jogador.atacando && !jogador.pulando) {
             jogador.atacando = true;
             jogador.frameAtaque = 0;
+            tocarSom('soco');
+            
             let zonaAtaque = {x: jogador.x - 30, y: jogador.y - 30, w: jogador.size + 60, h: jogador.size + 60};
             let retInimigo = {x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size};
             if (retIntersect(zonaAtaque, retInimigo)) {
@@ -176,18 +229,20 @@
             jogador.framePulo = 0;
         }
 
-        // Movimento do Jogador
+        // Movimento do Jogador baseado no Joystick Analógico
         let velX = 0, velY = 0;
         jogador.andando = false;
 
         if (!jogador.atacando) {
-            if (keys.a) { velX = -jogador.speed; jogador.andando = true; jogador.viradoDireita = false; }
-            if (keys.d) { velX = jogador.speed; jogador.andando = true; jogador.viradoDireita = true; }
-            if (keys.w) { velY = -jogador.speed; jogador.andando = true; }
-            if (keys.s) { velY = jogador.speed; jogador.andando = true; }
+            velX = joyAxis.x * jogador.speed;
+            velY = joyAxis.y * jogador.speed;
+            
+            if (Math.abs(velX) > 0.1 || Math.abs(velY) > 0.1) jogador.andando = true;
+            if (velX > 0.1) jogador.viradoDireita = true;
+            else if (velX < -0.1) jogador.viradoDireita = false;
         }
 
-        // Z-axis (Pulo)
+        // Eixo Z (Pulo) e Animações
         if (jogador.pulando) {
             jogador.z += jogador.velZ;
             jogador.velZ -= gravidade;
@@ -202,17 +257,16 @@
             jogador.frameAtaque += 0.3;
             if (jogador.frameAtaque >= 4) jogador.atacando = false;
         } else if (jogador.andando) {
-            jogador.frameAndar += 0.25;
+            jogador.frameAndar += Math.max(0.15, Math.abs(joyAxis.x) * 0.3 + Math.abs(joyAxis.y) * 0.3); // Anima mais rápido se arrastar mais
             if (jogador.frameAndar >= 6) jogador.frameAndar = 0;
         }
 
-        // Movimento Eixo X
+        // Colisões de Parede
         jogador.x += velX;
         let retX = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
         if (!jogador.pulando && obstaculos.some(obs => retIntersect(retX, obs))) jogador.x -= velX;
         jogador.x = Math.max(0, Math.min(jogador.x, 800 - jogador.size));
 
-        // Movimento Eixo Y
         jogador.y += velY;
         let retY = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
         if (!jogador.pulando && obstaculos.some(obs => retIntersect(retY, obs))) jogador.y -= velY;
@@ -228,45 +282,47 @@
         inimigo.y += velArmadilhaY;
         if (obstaculos.some(obs => retIntersect({x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size}, obs))) inimigo.y -= velArmadilhaY;
 
-        // Interações
+        // Interações com Itens
         let retJogador = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
         let retMoeda = {x: moeda.x, y: moeda.y, w: moeda.size, h: moeda.size};
         let retInimigo = {x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size};
         let retBau = {x: bau.x, y: bau.y, w: bau.size, h: bau.size};
 
+        // Coletar Moeda
         if (!jogador.pulando && retIntersect(retJogador, retMoeda)) {
+            tocarSom('moeda');
             pontos += 10;
             gerarMoeda();
             if (pontos >= 50) bau.visivel = true;
         }
 
+        // Mudar Nível
         if (!jogador.pulando && bau.visivel && retIntersect(retJogador, retBau)) {
             nivel++; pontos = 0; bau.visivel = false; inimigo.speed += 0.5;
             jogador.x = 400; jogador.y = 300; inimigo.x = 100; inimigo.y = 100;
         }
 
+        // Tomar Dano
         if (invencivelTimer > 0) invencivelTimer--;
         if (!jogador.pulando && !jogador.atacando && invencivelTimer <= 0 && retIntersect(retJogador, retInimigo)) {
+            tocarSom('soco');
             vidas--;
-            invencivelTimer = 90; // tempo de invencibilidade (fps)
+            invencivelTimer = 90;
             if (vidas <= 0) estadoJogo = "MORRENDO";
         }
     }
 
     // ==========================================
-    // 5. FUNÇÃO PARA DESENHAR ANIMACÃO (SPRITE)
+    // 5. DESENHADOR DE ANIMAÇÃO
     // ==========================================
     function desenharSprite(imgObj, framesTotais, frameAtual, dx, dy, dw, dh, viradoDireita = true) {
-        if (!imgObj.carregada) return false;
-        
-        // No Python: cartela.get_width() // framesTotais
+        if (!imgObj || !imgObj.carregada) return false;
         const sw = imgObj.img.width / framesTotais;
         const sh = imgObj.img.height;
         const sx = Math.floor(frameAtual) * sw;
 
         ctx.save();
         if (!viradoDireita) {
-            // Inverter a imagem horizontalmente
             ctx.translate(dx + dw, dy);
             ctx.scale(-1, 1);
             ctx.drawImage(imgObj.img, sx, 0, sw, sh, 0, 0, dw, dh);
@@ -278,18 +334,13 @@
     }
 
     // ==========================================
-    // 6. DESENHO NO ECRÃ
+    // 6. RENDERIZAÇÃO GRÁFICA
     // ==========================================
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // --- Cenario ---
-        if (imagens['cenario'].carregada) {
-            ctx.drawImage(imagens['cenario'].img, 0, 0, canvas.width, canvas.height);
-        } else {
-            ctx.fillStyle = (estadoJogo === "MENU") ? "#142814" : "#1e461e";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
+        if (imagens['cenario'].carregada) ctx.drawImage(imagens['cenario'].img, 0, 0, canvas.width, canvas.height);
+        else { ctx.fillStyle = (estadoJogo === "MENU") ? "#142814" : "#1e461e"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
 
         if (estadoJogo === "MENU") {
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0,0,800,600);
@@ -298,38 +349,26 @@
         } 
         else if (estadoJogo === "JOGANDO" || estadoJogo === "MORRENDO" || estadoJogo === "GAME_OVER") {
             
-            // Desenhar Obstáculos
             obstaculos.forEach(obs => {
-                if (imagens['obstaculo'].carregada) {
-                    ctx.drawImage(imagens['obstaculo'].img, obs.x, obs.y, obs.w, obs.h);
-                } else {
-                    ctx.fillStyle = "gray"; ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-                }
+                if (imagens['obstaculo'].carregada) ctx.drawImage(imagens['obstaculo'].img, obs.x, obs.y, obs.w, obs.h);
+                else { ctx.fillStyle = "gray"; ctx.fillRect(obs.x, obs.y, obs.w, obs.h); }
             });
 
-            // Desenhar Moeda Animada
             let desenhouMoeda = desenharSprite(imagens['moeda'], Math.max(1, imagens['moeda'].img.width / imagens['moeda'].img.height || 4), moeda.frame % 4, moeda.x, moeda.y, moeda.size, moeda.size);
-            if (!desenhouMoeda) {
-                ctx.fillStyle = "gold";
-                ctx.beginPath(); ctx.arc(moeda.x + 10, moeda.y + 10, 10, 0, Math.PI*2); ctx.fill();
-            }
+            if (!desenhouMoeda) { ctx.fillStyle = "gold"; ctx.beginPath(); ctx.arc(moeda.x + 10, moeda.y + 10, 10, 0, Math.PI*2); ctx.fill(); }
 
-            // Desenhar Baú
             if (bau.visivel) {
                 if (imagens['bau'].carregada) ctx.drawImage(imagens['bau'].img, bau.x, bau.y, bau.size, bau.size);
                 else { ctx.fillStyle = "#8b4513"; ctx.fillRect(bau.x, bau.y, bau.size, bau.size); }
             }
 
-            // Desenhar Inimigo
             if (imagens['inimigo'].carregada) ctx.drawImage(imagens['inimigo'].img, inimigo.x, inimigo.y, inimigo.size, inimigo.size);
             else { ctx.fillStyle = "red"; ctx.fillRect(inimigo.x, inimigo.y, inimigo.size, inimigo.size); }
 
-            // Desenhar Jogador
             let mostrarJogador = true;
             if (invencivelTimer > 0 && Math.floor(invencivelTimer / 10) % 2 === 0) mostrarJogador = false;
 
             if (mostrarJogador) {
-                // Sombra do pulo
                 if (jogador.pulando) {
                     ctx.fillStyle = "rgba(0,0,0,0.4)";
                     ctx.beginPath(); ctx.ellipse(jogador.x + 20, jogador.y + 35, 20, 5, 0, 0, Math.PI*2); ctx.fill();
@@ -343,7 +382,9 @@
                 } else if (estadoJogo === "GAME_OVER") {
                     desenhouHeroi = desenharSprite(imagens['morte'], 8, 7, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
                 } else if (jogador.pulando) {
-                    desenhouHeroi = desenharSprite(imagens['pulo'], 8, jogador.framePulo, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                    // SE A IMAGEM PULO EXISTIR, ELE USA. SE NÃO, USA A ANIMAÇÃO DE ANDAR! (Correção do Quadrado)
+                    if (imagens['pulo'].carregada) desenhouHeroi = desenharSprite(imagens['pulo'], 8, jogador.framePulo, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                    else desenhouHeroi = desenharSprite(imagens['andar'], 6, jogador.frameAndar, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
                 } else if (jogador.atacando) {
                     desenhouHeroi = desenharSprite(imagens['ataque'], 4, jogador.frameAtaque, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
                 } else if (jogador.andando) {
@@ -354,28 +395,20 @@
                         if (!jogador.viradoDireita) {
                             ctx.translate(jogador.x + jogador.size, yDesenho); ctx.scale(-1, 1);
                             ctx.drawImage(imagens['heroi_parado'].img, 0, 0, jogador.size, jogador.size);
-                        } else {
-                            ctx.drawImage(imagens['heroi_parado'].img, jogador.x, yDesenho, jogador.size, jogador.size);
-                        }
+                        } else ctx.drawImage(imagens['heroi_parado'].img, jogador.x, yDesenho, jogador.size, jogador.size);
                         ctx.restore();
                         desenhouHeroi = true;
                     }
                 }
 
-                if (!desenhouHeroi) {
-                    ctx.fillStyle = (jogador.atacando) ? "purple" : "pink";
-                    ctx.fillRect(jogador.x, yDesenho, jogador.size, jogador.size);
-                }
+                if (!desenhouHeroi) { ctx.fillStyle = (jogador.atacando) ? "purple" : "pink"; ctx.fillRect(jogador.x, yDesenho, jogador.size, jogador.size); }
             }
 
-            // UI
             ctx.fillStyle = "white"; ctx.font = "24px sans-serif";
             ctx.fillText(`Pontos: ${pontos}`, 10, 30);
             ctx.fillText(`Nível: ${nivel}`, 700, 30);
             ctx.fillStyle = "red";
-            for(let i=0; i<vidas; i++) {
-                ctx.beginPath(); ctx.arc(30 + i*30, 60, 10, 0, Math.PI*2); ctx.fill();
-            }
+            for(let i=0; i<vidas; i++) { ctx.beginPath(); ctx.arc(30 + i*30, 60, 10, 0, Math.PI*2); ctx.fill(); }
 
             if (estadoJogo === "GAME_OVER") {
                 ctx.fillStyle = "rgba(50, 0, 0, 0.7)"; ctx.fillRect(0,0,800,600);
