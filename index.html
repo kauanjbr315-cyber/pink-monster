@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pink Monster - Mobile</title>
+    <style>
+        body { margin: 0; padding: 0; background: #222; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; object-fit: contain; background: #1e461e; }
+        
+        /* Controlos Mobile */
+        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none; }
+        .btn-group { display: flex; flex-wrap: wrap; width: 140px; pointer-events: auto; }
+        .btn { width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 5px; margin: 2px; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 20px; user-select: none; }
+        .btn:active { background: rgba(255,255,255,0.8); }
+        
+        /* D-Pad Layout */
+        .dpad { position: relative; width: 120px; height: 120px; pointer-events: auto; }
+        .btn-up { position: absolute; top: 0; left: 40px; }
+        .btn-left { position: absolute; top: 40px; left: 0; }
+        .btn-right { position: absolute; top: 40px; left: 80px; }
+        .btn-down { position: absolute; top: 80px; left: 40px; }
+        
+        /* Botões de Ação */
+        .actions { align-items: flex-end; justify-content: flex-end; position: relative; width: 120px; height: 120px; pointer-events: auto;}
+        .btn-jump { position: absolute; top: 40px; right: 60px; width: 50px; height: 50px; border-radius: 25px; }
+        .btn-attack { position: absolute; top: 80px; right: 0px; width: 50px; height: 50px; border-radius: 25px; background: rgba(255,100,100,0.5); }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<div class="controls">
+    <div class="dpad">
+        <div class="btn btn-up" id="btnW">W</div>
+        <div class="btn btn-left" id="btnA">A</div>
+        <div class="btn btn-right" id="btnD">D</div>
+        <div class="btn btn-down" id="btnS">S</div>
+    </div>
+    <div class="actions">
+        <div class="btn btn-jump" id="btnSpace">Pulo</div>
+        <div class="btn btn-attack" id="btnJ">Soco</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // ==========================================
+    // 1. CARREGAR IMAGENS (Assets)
+    // ==========================================
+    const imagens = {};
+    function carregarImagem(nome, src) {
+        imagens[nome] = { img: new Image(), carregada: false };
+        imagens[nome].img.onload = () => { imagens[nome].carregada = true; };
+        imagens[nome].img.onerror = () => { console.log("Erro a carregar: " + src); };
+        imagens[nome].img.src = src;
+    }
+
+    // Nomes dos ficheiros como no seu Python
+    carregarImagem('heroi_parado', 'Pink_Monster.png');
+    carregarImagem('inimigo', 'Rock1.png');
+    carregarImagem('bau', 'pngwing.com.png');
+    carregarImagem('obstaculo', 'Rock2.png');
+    carregarImagem('cenario', 'cenario.jpg'); // Também pode tentar cenario.png
+    
+    // Cartelas de Animação (Spritesheets)
+    carregarImagem('andar', 'Pink_Monster_Walk_6.png');
+    carregarImagem('ataque', 'Pink_Monster_Attack1_4.png');
+    carregarImagem('morte', 'Pink_Monster_Death_8.png');
+    carregarImagem('pulo', 'Pink_Monster_Jump_8.png');
+    carregarImagem('moeda', 'coin1_16x16.png');
+
+    // ==========================================
+    // 2. INPUTS (Controlos de Ecrã Tátil)
+    // ==========================================
+    const keys = { w: false, a: false, s: false, d: false, space: false, j: false };
+    
+    function bindButton(id, keyName) {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+        btn.addEventListener('mousedown', (e) => { keys[keyName] = true; });
+        btn.addEventListener('mouseup', (e) => { keys[keyName] = false; });
+    }
+    bindButton('btnW', 'w'); bindButton('btnA', 'a'); bindButton('btnS', 's'); bindButton('btnD', 'd');
+    bindButton('btnSpace', 'space'); bindButton('btnJ', 'j');
+
+    canvas.addEventListener('touchstart', iniciarJogo);
+    canvas.addEventListener('mousedown', iniciarJogo);
+
+    // ==========================================
+    // 3. VARIÁVEIS DE JOGO
+    // ==========================================
+    let estadoJogo = "MENU";
+    let vidas = 3;
+    let pontos = 0;
+    let nivel = 1;
+    let invencivelTimer = 0;
+    
+    let jogador = { 
+        x: 400, y: 300, size: 40, speed: 5, 
+        z: 0, velZ: 0, pulando: false, atacando: false, andando: false, viradoDireita: true,
+        frameAndar: 0, frameAtaque: 0, framePulo: 0, frameMorte: 0 
+    };
+    let inimigo = { x: 100, y: 100, size: 40, speed: 1.5 };
+    let moeda = { x: 0, y: 0, size: 20, frame: 0 };
+    let bau = { x: 380, y: 50, size: 40, visivel: false };
+    
+    const gravidade = 0.8;
+    const forcaPulo = 12;
+
+    const obstaculos = [
+        {x: 200, y: 100, w: 40, h: 40}, {x: 200, y: 140, w: 40, h: 40}, {x: 200, y: 180, w: 40, h: 40},
+        {x: 500, y: 400, w: 40, h: 40}, {x: 540, y: 400, w: 40, h: 40}, {x: 580, y: 400, w: 40, h: 40},
+        {x: 400, y: 150, w: 40, h: 40}, {x: 400, y: 190, w: 40, h: 40}, {x: 650, y: 150, w: 40, h: 40}, {x: 100, y: 450, w: 40, h: 40}
+    ];
+
+    function retIntersect(r1, r2) {
+        return !(r2.x > r1.x + r1.w || r2.x + r2.w < r1.x || r2.y > r1.y + r1.h || r2.y + r2.h < r1.y);
+    }
+
+    function gerarMoeda() {
+        let colisao = true;
+        while(colisao) {
+            moeda.x = Math.random() * (800 - moeda.size);
+            moeda.y = Math.random() * (600 - moeda.size);
+            let retM = {x: moeda.x, y: moeda.y, w: moeda.size, h: moeda.size};
+            colisao = obstaculos.some(obs => retIntersect(retM, obs));
+        }
+    }
+    gerarMoeda();
+
+    function iniciarJogo() {
+        if (estadoJogo === "MENU" || estadoJogo === "GAME_OVER") {
+            estadoJogo = "JOGANDO";
+            jogador.x = 400; jogador.y = 300; jogador.z = 0; jogador.pulando = false; jogador.viradoDireita = true;
+            jogador.frameMorte = 0;
+            inimigo.x = 100; inimigo.y = 100; inimigo.speed = 1.5;
+            pontos = 0; nivel = 1; vidas = 3; bau.visivel = false;
+            gerarMoeda();
+        }
+    }
+
+    // ==========================================
+    // 4. LÓGICA DO JOGO
+    // ==========================================
+    function update() {
+        moeda.frame += 0.2; // Animação da moeda
+
+        if (estadoJogo === "MORRENDO") {
+            jogador.frameMorte += 0.15;
+            if (jogador.frameMorte >= 8) estadoJogo = "GAME_OVER";
+            return;
+        }
+
+        if (estadoJogo !== "JOGANDO") return;
+
+        // Ataque
+        if (keys.j && !jogador.atacando && !jogador.pulando) {
+            jogador.atacando = true;
+            jogador.frameAtaque = 0;
+            let zonaAtaque = {x: jogador.x - 30, y: jogador.y - 30, w: jogador.size + 60, h: jogador.size + 60};
+            let retInimigo = {x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size};
+            if (retIntersect(zonaAtaque, retInimigo)) {
+                inimigo.x = 100; inimigo.y = 100;
+            }
+        }
+
+        // Pulo
+        if (keys.space && !jogador.pulando && !jogador.atacando) {
+            jogador.pulando = true;
+            jogador.velZ = forcaPulo;
+            jogador.framePulo = 0;
+        }
+
+        // Movimento do Jogador
+        let velX = 0, velY = 0;
+        jogador.andando = false;
+
+        if (!jogador.atacando) {
+            if (keys.a) { velX = -jogador.speed; jogador.andando = true; jogador.viradoDireita = false; }
+            if (keys.d) { velX = jogador.speed; jogador.andando = true; jogador.viradoDireita = true; }
+            if (keys.w) { velY = -jogador.speed; jogador.andando = true; }
+            if (keys.s) { velY = jogador.speed; jogador.andando = true; }
+        }
+
+        // Z-axis (Pulo)
+        if (jogador.pulando) {
+            jogador.z += jogador.velZ;
+            jogador.velZ -= gravidade;
+            jogador.framePulo += 0.25;
+            if (jogador.framePulo >= 8) jogador.framePulo = 7;
+
+            if (jogador.z <= 0) {
+                jogador.z = 0;
+                jogador.pulando = false;
+            }
+        } else if (jogador.atacando) {
+            jogador.frameAtaque += 0.3;
+            if (jogador.frameAtaque >= 4) jogador.atacando = false;
+        } else if (jogador.andando) {
+            jogador.frameAndar += 0.25;
+            if (jogador.frameAndar >= 6) jogador.frameAndar = 0;
+        }
+
+        // Movimento Eixo X
+        jogador.x += velX;
+        let retX = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
+        if (!jogador.pulando && obstaculos.some(obs => retIntersect(retX, obs))) jogador.x -= velX;
+        jogador.x = Math.max(0, Math.min(jogador.x, 800 - jogador.size));
+
+        // Movimento Eixo Y
+        jogador.y += velY;
+        let retY = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
+        if (!jogador.pulando && obstaculos.some(obs => retIntersect(retY, obs))) jogador.y -= velY;
+        jogador.y = Math.max(0, Math.min(jogador.y, 600 - jogador.size));
+
+        // Movimento do Inimigo
+        let velArmadilhaX = 0, velArmadilhaY = 0;
+        if (inimigo.x < jogador.x) velArmadilhaX = inimigo.speed; else if (inimigo.x > jogador.x) velArmadilhaX = -inimigo.speed;
+        if (inimigo.y < jogador.y) velArmadilhaY = inimigo.speed; else if (inimigo.y > jogador.y) velArmadilhaY = -inimigo.speed;
+        
+        inimigo.x += velArmadilhaX;
+        if (obstaculos.some(obs => retIntersect({x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size}, obs))) inimigo.x -= velArmadilhaX;
+        inimigo.y += velArmadilhaY;
+        if (obstaculos.some(obs => retIntersect({x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size}, obs))) inimigo.y -= velArmadilhaY;
+
+        // Interações
+        let retJogador = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
+        let retMoeda = {x: moeda.x, y: moeda.y, w: moeda.size, h: moeda.size};
+        let retInimigo = {x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size};
+        let retBau = {x: bau.x, y: bau.y, w: bau.size, h: bau.size};
+
+        if (!jogador.pulando && retIntersect(retJogador, retMoeda)) {
+            pontos += 10;
+            gerarMoeda();
+            if (pontos >= 50) bau.visivel = true;
+        }
+
+        if (!jogador.pulando && bau.visivel && retIntersect(retJogador, retBau)) {
+            nivel++; pontos = 0; bau.visivel = false; inimigo.speed += 0.5;
+            jogador.x = 400; jogador.y = 300; inimigo.x = 100; inimigo.y = 100;
+        }
+
+        if (invencivelTimer > 0) invencivelTimer--;
+        if (!jogador.pulando && !jogador.atacando && invencivelTimer <= 0 && retIntersect(retJogador, retInimigo)) {
+            vidas--;
+            invencivelTimer = 90; // tempo de invencibilidade (fps)
+            if (vidas <= 0) estadoJogo = "MORRENDO";
+        }
+    }
+
+    // ==========================================
+    // 5. FUNÇÃO PARA DESENHAR ANIMACÃO (SPRITE)
+    // ==========================================
+    function desenharSprite(imgObj, framesTotais, frameAtual, dx, dy, dw, dh, viradoDireita = true) {
+        if (!imgObj.carregada) return false;
+        
+        // No Python: cartela.get_width() // framesTotais
+        const sw = imgObj.img.width / framesTotais;
+        const sh = imgObj.img.height;
+        const sx = Math.floor(frameAtual) * sw;
+
+        ctx.save();
+        if (!viradoDireita) {
+            // Inverter a imagem horizontalmente
+            ctx.translate(dx + dw, dy);
+            ctx.scale(-1, 1);
+            ctx.drawImage(imgObj.img, sx, 0, sw, sh, 0, 0, dw, dh);
+        } else {
+            ctx.drawImage(imgObj.img, sx, 0, sw, sh, dx, dy, dw, dh);
+        }
+        ctx.restore();
+        return true;
+    }
+
+    // ==========================================
+    // 6. DESENHO NO ECRÃ
+    // ==========================================
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // --- Cenario ---
+        if (imagens['cenario'].carregada) {
+            ctx.drawImage(imagens['cenario'].img, 0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.fillStyle = (estadoJogo === "MENU") ? "#142814" : "#1e461e";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (estadoJogo === "MENU") {
+            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0,0,800,600);
+            ctx.fillStyle = "gold"; ctx.font = "80px sans-serif"; ctx.fillText("Pink Monster", 180, 250);
+            ctx.fillStyle = "white"; ctx.font = "30px sans-serif"; ctx.fillText("Toque na tela para iniciar", 250, 400);
+        } 
+        else if (estadoJogo === "JOGANDO" || estadoJogo === "MORRENDO" || estadoJogo === "GAME_OVER") {
+            
+            // Desenhar Obstáculos
+            obstaculos.forEach(obs => {
+                if (imagens['obstaculo'].carregada) {
+                    ctx.drawImage(imagens['obstaculo'].img, obs.x, obs.y, obs.w, obs.h);
+                } else {
+                    ctx.fillStyle = "gray"; ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                }
+            });
+
+            // Desenhar Moeda Animada
+            let desenhouMoeda = desenharSprite(imagens['moeda'], Math.max(1, imagens['moeda'].img.width / imagens['moeda'].img.height || 4), moeda.frame % 4, moeda.x, moeda.y, moeda.size, moeda.size);
+            if (!desenhouMoeda) {
+                ctx.fillStyle = "gold";
+                ctx.beginPath(); ctx.arc(moeda.x + 10, moeda.y + 10, 10, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Desenhar Baú
+            if (bau.visivel) {
+                if (imagens['bau'].carregada) ctx.drawImage(imagens['bau'].img, bau.x, bau.y, bau.size, bau.size);
+                else { ctx.fillStyle = "#8b4513"; ctx.fillRect(bau.x, bau.y, bau.size, bau.size); }
+            }
+
+            // Desenhar Inimigo
+            if (imagens['inimigo'].carregada) ctx.drawImage(imagens['inimigo'].img, inimigo.x, inimigo.y, inimigo.size, inimigo.size);
+            else { ctx.fillStyle = "red"; ctx.fillRect(inimigo.x, inimigo.y, inimigo.size, inimigo.size); }
+
+            // Desenhar Jogador
+            let mostrarJogador = true;
+            if (invencivelTimer > 0 && Math.floor(invencivelTimer / 10) % 2 === 0) mostrarJogador = false;
+
+            if (mostrarJogador) {
+                // Sombra do pulo
+                if (jogador.pulando) {
+                    ctx.fillStyle = "rgba(0,0,0,0.4)";
+                    ctx.beginPath(); ctx.ellipse(jogador.x + 20, jogador.y + 35, 20, 5, 0, 0, Math.PI*2); ctx.fill();
+                }
+
+                let yDesenho = jogador.y - jogador.z;
+                let desenhouHeroi = false;
+
+                if (estadoJogo === "MORRENDO") {
+                    desenhouHeroi = desenharSprite(imagens['morte'], 8, Math.min(7, jogador.frameMorte), jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                } else if (estadoJogo === "GAME_OVER") {
+                    desenhouHeroi = desenharSprite(imagens['morte'], 8, 7, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                } else if (jogador.pulando) {
+                    desenhouHeroi = desenharSprite(imagens['pulo'], 8, jogador.framePulo, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                } else if (jogador.atacando) {
+                    desenhouHeroi = desenharSprite(imagens['ataque'], 4, jogador.frameAtaque, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                } else if (jogador.andando) {
+                    desenhouHeroi = desenharSprite(imagens['andar'], 6, jogador.frameAndar, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
+                } else {
+                    if (imagens['heroi_parado'].carregada) {
+                        ctx.save();
+                        if (!jogador.viradoDireita) {
+                            ctx.translate(jogador.x + jogador.size, yDesenho); ctx.scale(-1, 1);
+                            ctx.drawImage(imagens['heroi_parado'].img, 0, 0, jogador.size, jogador.size);
+                        } else {
+                            ctx.drawImage(imagens['heroi_parado'].img, jogador.x, yDesenho, jogador.size, jogador.size);
+                        }
+                        ctx.restore();
+                        desenhouHeroi = true;
+                    }
+                }
+
+                if (!desenhouHeroi) {
+                    ctx.fillStyle = (jogador.atacando) ? "purple" : "pink";
+                    ctx.fillRect(jogador.x, yDesenho, jogador.size, jogador.size);
+                }
+            }
+
+            // UI
+            ctx.fillStyle = "white"; ctx.font = "24px sans-serif";
+            ctx.fillText(`Pontos: ${pontos}`, 10, 30);
+            ctx.fillText(`Nível: ${nivel}`, 700, 30);
+            ctx.fillStyle = "red";
+            for(let i=0; i<vidas; i++) {
+                ctx.beginPath(); ctx.arc(30 + i*30, 60, 10, 0, Math.PI*2); ctx.fill();
+            }
+
+            if (estadoJogo === "GAME_OVER") {
+                ctx.fillStyle = "rgba(50, 0, 0, 0.7)"; ctx.fillRect(0,0,800,600);
+                ctx.fillStyle = "red"; ctx.font = "80px sans-serif"; ctx.fillText("GAME OVER", 200, 300);
+                ctx.fillStyle = "white"; ctx.font = "30px sans-serif"; ctx.fillText("Toque na tela para recomeçar", 220, 400);
+            }
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+    
+    loop();
+</script>
+</body>
+</html>
