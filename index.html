@@ -16,7 +16,7 @@
         /* Controles Mobile */
         .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; pointer-events: none; }
         
-        /* Joystick HUD (A bolinha) */
+        /* Joystick HUD */
         .joystick-container { position: relative; width: 120px; height: 120px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; border: 2px solid rgba(255, 255, 255, 0.5); }
         .joystick-knob { width: 50px; height: 50px; background: rgba(255, 255, 255, 0.7); border-radius: 50%; position: absolute; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
 
@@ -51,9 +51,6 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // ==========================================
-    // 1. CARREGAR IMAGENS E SONS
-    // ==========================================
     const imagens = {};
     function carregarImagem(nome, src) {
         imagens[nome] = { img: new Image(), carregada: false };
@@ -76,7 +73,7 @@
         moeda: new Audio('moeda.wav'),
         soco: new Audio('soco.wav'),
         gameover: new Audio('gameover.wav'),
-        fundo: new Audio('Quem leu se fudeu.mp3') // Seu áudio
+        fundo: new Audio('Quem leu se fudeu.mp3') 
     };
     
     sons.fundo.loop = true; 
@@ -90,26 +87,30 @@
     }
 
     // ==========================================
-    // MÁGICA DA TELA INICIAL (CORRIGIDA)
+    // MÁGICA DA TELA INICIAL (USANDO O EVENTO CLIQUE CORRETO)
     // ==========================================
     const telaInicial = document.getElementById("telaInicial");
     const btnComecar = document.getElementById("btnComecar");
 
-    function arrancarJogo(e) {
-        e.preventDefault();
+    // O evento 'click' é a única coisa que os navegadores mobile confiam a 100%
+    btnComecar.addEventListener('click', function() {
         telaInicial.style.display = "none"; 
 
-        // Desbloqueia APENAS os efeitos sonoros
+        // 1. TOCA A MÚSICA DIRETAMENTE AQUI NO CLIQUE!
+        sons.fundo.currentTime = 0;
+        let playPromise = sons.fundo.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(e => console.log("Erro de áudio:", e));
+        }
+
+        // 2. Desbloqueia os outros efeitos
         sons.moeda.play().then(() => sons.moeda.pause()).catch(()=>{});
         sons.soco.play().then(() => sons.soco.pause()).catch(()=>{});
         sons.gameover.play().then(() => sons.gameover.pause()).catch(()=>{});
 
-        // Inicia o jogo (e a música de fundo sem pausas)
+        // 3. Arranca o jogo
         iniciarJogo();
-    }
-
-    btnComecar.addEventListener('touchstart', arrancarJogo, {passive: false});
-    btnComecar.addEventListener('mousedown', arrancarJogo);
+    });
 
     // ==========================================
     // 2. INPUTS (Joystick e Botões)
@@ -150,13 +151,17 @@
     joyBase.addEventListener('touchmove', (e) => { if(joyAtivo) atualizarJoystick(e); }, {passive: false});
     joyBase.addEventListener('touchend', (e) => { joyAtivo = false; joyAxis = {x: 0, y: 0}; joyKnob.style.transform = `translate(0px, 0px)`; });
 
-    // Recomeçar depois do Game Over
     canvas.addEventListener('touchstart', (e) => {
-        if(estadoJogo === "GAME_OVER") iniciarJogo();
+        if(estadoJogo === "GAME_OVER") {
+            iniciarJogo();
+            // Toca a música novamente se recomeçar
+            sons.fundo.currentTime = 0;
+            sons.fundo.play().catch(()=>{});
+        }
     });
 
     // ==========================================
-    // 3. VARIÁVEIS DE JOGO
+    // 3. VARIÁVEIS E LÓGICA DE JOGO
     // ==========================================
     let estadoJogo = "MENU"; 
     let vidas = 3;
@@ -203,15 +208,8 @@
         inimigo.x = 100; inimigo.y = 100; inimigo.speed = 1.5;
         pontos = 0; nivel = 1; vidas = 3; bau.visivel = false;
         gerarMoeda();
-        
-        // COMEÇA A MÚSICA (AGORA SEM SER PAUSADA LOGO A SEGUIR!)
-        sons.fundo.currentTime = 0;
-        sons.fundo.play().catch(e => console.log("Áudio bloqueado:", e));
     }
 
-    // ==========================================
-    // 4. LÓGICA DO JOGO
-    // ==========================================
     function update() {
         moeda.frame += 0.2; 
 
