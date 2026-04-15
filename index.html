@@ -76,7 +76,7 @@
         moeda: new Audio('moeda.wav'),
         soco: new Audio('soco.wav'),
         gameover: new Audio('gameover.wav'),
-        fundo: new Audio('Quem leu se fudeu.mp3') // <-- TEM QUE ESTAR LÁ NO GITHUB!
+        fundo: new Audio('Quem leu se fudeu.mp3') // Seu áudio
     };
     
     sons.fundo.loop = true; 
@@ -90,24 +90,21 @@
     }
 
     // ==========================================
-    // MÁGICA DA TELA INICIAL (Desbloqueio de Áudio)
+    // MÁGICA DA TELA INICIAL (CORRIGIDA)
     // ==========================================
     const telaInicial = document.getElementById("telaInicial");
     const btnComecar = document.getElementById("btnComecar");
 
     function arrancarJogo(e) {
         e.preventDefault();
-        telaInicial.style.display = "none"; // Esconde a tela gigante
+        telaInicial.style.display = "none"; 
 
-        // Engana o navegador tocando os áudios no mudo rápido
-        Object.values(sons).forEach(som => {
-            som.muted = true;
-            let p = som.play();
-            if(p !== undefined) {
-                p.then(() => { som.pause(); som.currentTime = 0; som.muted = false; }).catch(()=>{});
-            }
-        });
+        // Desbloqueia APENAS os efeitos sonoros
+        sons.moeda.play().then(() => sons.moeda.pause()).catch(()=>{});
+        sons.soco.play().then(() => sons.soco.pause()).catch(()=>{});
+        sons.gameover.play().then(() => sons.gameover.pause()).catch(()=>{});
 
+        // Inicia o jogo (e a música de fundo sem pausas)
         iniciarJogo();
     }
 
@@ -153,7 +150,7 @@
     joyBase.addEventListener('touchmove', (e) => { if(joyAtivo) atualizarJoystick(e); }, {passive: false});
     joyBase.addEventListener('touchend', (e) => { joyAtivo = false; joyAxis = {x: 0, y: 0}; joyKnob.style.transform = `translate(0px, 0px)`; });
 
-    // Clicar no ecrã para recomeçar depois do Game Over
+    // Recomeçar depois do Game Over
     canvas.addEventListener('touchstart', (e) => {
         if(estadoJogo === "GAME_OVER") iniciarJogo();
     });
@@ -161,7 +158,7 @@
     // ==========================================
     // 3. VARIÁVEIS DE JOGO
     // ==========================================
-    let estadoJogo = "MENU"; // Começa no Menu por causa do Overlay
+    let estadoJogo = "MENU"; 
     let vidas = 3;
     let pontos = 0;
     let nivel = 1;
@@ -207,7 +204,7 @@
         pontos = 0; nivel = 1; vidas = 3; bau.visivel = false;
         gerarMoeda();
         
-        // COMEÇA A MÚSICA
+        // COMEÇA A MÚSICA (AGORA SEM SER PAUSADA LOGO A SEGUIR!)
         sons.fundo.currentTime = 0;
         sons.fundo.play().catch(e => console.log("Áudio bloqueado:", e));
     }
@@ -312,7 +309,7 @@
             invencivelTimer = 90;
             if (vidas <= 0) {
                 estadoJogo = "MORRENDO";
-                sons.fundo.pause(); // PÁRA A MÚSICA AQUI!
+                sons.fundo.pause(); 
             }
         }
     }
