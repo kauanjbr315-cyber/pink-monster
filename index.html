@@ -67,13 +67,18 @@
     const sons = {
         moeda: new Audio('moeda.wav'),
         soco: new Audio('soco.wav'),
-        gameover: new Audio('gameover.wav')
+        gameover: new Audio('gameover.wav'),
+        fundo: new Audio('Quem leu se fudeu.mp3') // <-- NOME CORRIGIDO AQUI!
     };
+    
+    // Configurações da música de fundo
+    sons.fundo.loop = true; 
+    sons.fundo.volume = 0.4; 
 
     function tocarSom(nomeSom) {
         if (sons[nomeSom]) {
-            sons[nomeSom].currentTime = 0; // Volta para o início para não cortar se pegar rápido
-            sons[nomeSom].play().catch(() => {}); // O catch evita erros antes do usuário tocar na tela
+            sons[nomeSom].currentTime = 0;
+            sons[nomeSom].play().catch(() => {});
         }
     }
 
@@ -82,7 +87,6 @@
     // ==========================================
     const keys = { space: false, j: false };
     
-    // Configurando Botões
     function bindButton(id, keyName) {
         const btn = document.getElementById(id);
         btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
@@ -91,12 +95,11 @@
     bindButton('btnSpace', 'space'); 
     bindButton('btnJ', 'j');
 
-    // Configurando Joystick (A Bolinha)
     const joyBase = document.getElementById("joystickBase");
     const joyKnob = document.getElementById("joystickKnob");
-    let joyAxis = { x: 0, y: 0 }; // Vai de -1 a 1
+    let joyAxis = { x: 0, y: 0 }; 
     let joyAtivo = false;
-    const raioMaximo = 40; // Distância que a bolinha pode ir
+    const raioMaximo = 40; 
 
     function atualizarJoystick(e) {
         e.preventDefault();
@@ -110,7 +113,6 @@
         let dy = touch.clientY - centroY;
         let distancia = Math.sqrt(dx * dx + dy * dy);
         
-        // Trava a bolinha dentro do círculo
         if (distancia > raioMaximo) {
             dx = (dx / distancia) * raioMaximo;
             dy = (dy / distancia) * raioMaximo;
@@ -118,7 +120,6 @@
         
         joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
         
-        // Define os eixos de velocidade para o jogador
         joyAxis.x = dx / raioMaximo;
         joyAxis.y = dy / raioMaximo;
     }
@@ -131,7 +132,6 @@
         joyKnob.style.transform = `translate(0px, 0px)`; 
     });
 
-    // Iniciar Jogo tocando na tela
     canvas.addEventListener('touchstart', iniciarJogo);
 
     // ==========================================
@@ -177,7 +177,6 @@
     gerarMoeda();
 
     function iniciarJogo() {
-        // Toca um áudio mudo rapidamente para desbloquear o som no navegador mobile
         if(estadoJogo === "MENU") {
             sons.moeda.play().then(() => { sons.moeda.pause(); sons.moeda.currentTime = 0; }).catch(()=>{});
         }
@@ -189,6 +188,10 @@
             inimigo.x = 100; inimigo.y = 100; inimigo.speed = 1.5;
             pontos = 0; nivel = 1; vidas = 3; bau.visivel = false;
             gerarMoeda();
+            
+            // INICIA A MÚSICA DE FUNDO
+            sons.fundo.currentTime = 0;
+            sons.fundo.play().catch(()=>{});
         }
     }
 
@@ -209,7 +212,6 @@
 
         if (estadoJogo !== "JOGANDO") return;
 
-        // Ataque
         if (keys.j && !jogador.atacando && !jogador.pulando) {
             jogador.atacando = true;
             jogador.frameAtaque = 0;
@@ -222,14 +224,12 @@
             }
         }
 
-        // Pulo
         if (keys.space && !jogador.pulando && !jogador.atacando) {
             jogador.pulando = true;
             jogador.velZ = forcaPulo;
             jogador.framePulo = 0;
         }
 
-        // Movimento do Jogador baseado no Joystick Analógico
         let velX = 0, velY = 0;
         jogador.andando = false;
 
@@ -242,7 +242,6 @@
             else if (velX < -0.1) jogador.viradoDireita = false;
         }
 
-        // Eixo Z (Pulo) e Animações
         if (jogador.pulando) {
             jogador.z += jogador.velZ;
             jogador.velZ -= gravidade;
@@ -257,11 +256,10 @@
             jogador.frameAtaque += 0.3;
             if (jogador.frameAtaque >= 4) jogador.atacando = false;
         } else if (jogador.andando) {
-            jogador.frameAndar += Math.max(0.15, Math.abs(joyAxis.x) * 0.3 + Math.abs(joyAxis.y) * 0.3); // Anima mais rápido se arrastar mais
+            jogador.frameAndar += Math.max(0.15, Math.abs(joyAxis.x) * 0.3 + Math.abs(joyAxis.y) * 0.3); 
             if (jogador.frameAndar >= 6) jogador.frameAndar = 0;
         }
 
-        // Colisões de Parede
         jogador.x += velX;
         let retX = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
         if (!jogador.pulando && obstaculos.some(obs => retIntersect(retX, obs))) jogador.x -= velX;
@@ -272,7 +270,6 @@
         if (!jogador.pulando && obstaculos.some(obs => retIntersect(retY, obs))) jogador.y -= velY;
         jogador.y = Math.max(0, Math.min(jogador.y, 600 - jogador.size));
 
-        // Movimento do Inimigo
         let velArmadilhaX = 0, velArmadilhaY = 0;
         if (inimigo.x < jogador.x) velArmadilhaX = inimigo.speed; else if (inimigo.x > jogador.x) velArmadilhaX = -inimigo.speed;
         if (inimigo.y < jogador.y) velArmadilhaY = inimigo.speed; else if (inimigo.y > jogador.y) velArmadilhaY = -inimigo.speed;
@@ -282,13 +279,11 @@
         inimigo.y += velArmadilhaY;
         if (obstaculos.some(obs => retIntersect({x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size}, obs))) inimigo.y -= velArmadilhaY;
 
-        // Interações com Itens
         let retJogador = {x: jogador.x, y: jogador.y, w: jogador.size, h: jogador.size};
         let retMoeda = {x: moeda.x, y: moeda.y, w: moeda.size, h: moeda.size};
         let retInimigo = {x: inimigo.x, y: inimigo.y, w: inimigo.size, h: inimigo.size};
         let retBau = {x: bau.x, y: bau.y, w: bau.size, h: bau.size};
 
-        // Coletar Moeda
         if (!jogador.pulando && retIntersect(retJogador, retMoeda)) {
             tocarSom('moeda');
             pontos += 10;
@@ -296,19 +291,20 @@
             if (pontos >= 50) bau.visivel = true;
         }
 
-        // Mudar Nível
         if (!jogador.pulando && bau.visivel && retIntersect(retJogador, retBau)) {
             nivel++; pontos = 0; bau.visivel = false; inimigo.speed += 0.5;
             jogador.x = 400; jogador.y = 300; inimigo.x = 100; inimigo.y = 100;
         }
 
-        // Tomar Dano
         if (invencivelTimer > 0) invencivelTimer--;
         if (!jogador.pulando && !jogador.atacando && invencivelTimer <= 0 && retIntersect(retJogador, retInimigo)) {
             tocarSom('soco');
             vidas--;
             invencivelTimer = 90;
-            if (vidas <= 0) estadoJogo = "MORRENDO";
+            if (vidas <= 0) {
+                estadoJogo = "MORRENDO";
+                sons.fundo.pause();
+            }
         }
     }
 
@@ -382,7 +378,6 @@
                 } else if (estadoJogo === "GAME_OVER") {
                     desenhouHeroi = desenharSprite(imagens['morte'], 8, 7, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
                 } else if (jogador.pulando) {
-                    // SE A IMAGEM PULO EXISTIR, ELE USA. SE NÃO, USA A ANIMAÇÃO DE ANDAR! (Correção do Quadrado)
                     if (imagens['pulo'].carregada) desenhouHeroi = desenharSprite(imagens['pulo'], 8, jogador.framePulo, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
                     else desenhouHeroi = desenharSprite(imagens['andar'], 6, jogador.frameAndar, jogador.x, yDesenho, jogador.size, jogador.size, jogador.viradoDireita);
                 } else if (jogador.atacando) {
