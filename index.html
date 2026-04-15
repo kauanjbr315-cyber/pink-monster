@@ -63,15 +63,13 @@
     carregarImagem('pulo', 'Pink_Monster_Jump_8.png');
     carregarImagem('moeda', 'coin1_16x16.png');
 
-    // Sons
     const sons = {
         moeda: new Audio('moeda.wav'),
         soco: new Audio('soco.wav'),
         gameover: new Audio('gameover.wav'),
-        fundo: new Audio('Quem leu se fudeu.mp3') // <-- NOME CORRIGIDO AQUI!
+        fundo: new Audio('Quem leu se fudeu.mp3') // Seu áudio original
     };
     
-    // Configurações da música de fundo
     sons.fundo.loop = true; 
     sons.fundo.volume = 0.4; 
 
@@ -81,6 +79,23 @@
             sons[nomeSom].play().catch(() => {});
         }
     }
+
+    // ==========================================
+    // DESBLOQUEADOR DE ÁUDIO (O SEGREDO PARA O CELULAR)
+    // ==========================================
+    let audioDesbloqueado = false;
+    document.body.addEventListener('touchstart', function() {
+        if (!audioDesbloqueado) {
+            // Toca um som mudo na primeira vez que o utilizador encosta no ecrã em qualquer lugar
+            sons.fundo.play().then(() => {
+                if(estadoJogo !== "JOGANDO") {
+                    sons.fundo.pause();
+                    sons.fundo.currentTime = 0;
+                }
+            }).catch(()=>{});
+            audioDesbloqueado = true;
+        }
+    }, { once: false });
 
     // ==========================================
     // 2. INPUTS (Joystick e Botões)
@@ -132,6 +147,7 @@
         joyKnob.style.transform = `translate(0px, 0px)`; 
     });
 
+    // Iniciar o jogo
     canvas.addEventListener('touchstart', iniciarJogo);
 
     // ==========================================
@@ -177,10 +193,6 @@
     gerarMoeda();
 
     function iniciarJogo() {
-        if(estadoJogo === "MENU") {
-            sons.moeda.play().then(() => { sons.moeda.pause(); sons.moeda.currentTime = 0; }).catch(()=>{});
-        }
-
         if (estadoJogo === "MENU" || estadoJogo === "GAME_OVER") {
             estadoJogo = "JOGANDO";
             jogador.x = 400; jogador.y = 300; jogador.z = 0; jogador.pulando = false; jogador.viradoDireita = true;
@@ -189,7 +201,7 @@
             pontos = 0; nivel = 1; vidas = 3; bau.visivel = false;
             gerarMoeda();
             
-            // INICIA A MÚSICA DE FUNDO
+            // Força a música a tocar sempre que iniciar
             sons.fundo.currentTime = 0;
             sons.fundo.play().catch(()=>{});
         }
